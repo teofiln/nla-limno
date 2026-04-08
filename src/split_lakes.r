@@ -68,18 +68,18 @@ d7 <- left_join(
 
 
 # Identify the thermocline depth as the depth of maximum temperature gradient
-thermo <- d7 %>%
-  group_by(site_id, year) %>%
+thermo <- d7 |>
+  group_by(site_id, year) |>
   # add number of observations per group (depth profile)
-  add_tally() %>%
+  add_tally() |>
   # filter out profiles with fewer than 5 observations (not enough data to identify thermocline)
-  filter(n > 5) %>%
+  filter(n > 5) |>
   # filter out profiles that have missing temperature data
-  filter(!is.na(temp)) %>%
-  arrange(site_id, year, depth) %>%
-  mutate(temp_gradient = c(NA, diff(temp))) %>%
-  # filter(site_id == "NLA06608-3320") %>%
-  mutate(thermocline_depth = depth[which.min(temp_gradient)]) %>%
+  filter(!is.na(temp)) |>
+  arrange(site_id, year, depth) |>
+  mutate(temp_gradient = c(NA, diff(temp))) |>
+  # filter(site_id == "NLA06608-3320")  |>
+  mutate(thermocline_depth = depth[which.min(temp_gradient)]) |>
   ungroup() |>
   distinct(site_id, year, thermocline_depth, .keep_all = TRUE)
 
@@ -105,8 +105,8 @@ thermo <- d7 %>%
 #     Xeric West (XR): Encompasses the arid and semi-arid deserts and plateaus of the West
 
 # Summarise thermocline depth by wsa_eco9
-thermo_summary <- thermo %>%
-  group_by(wsa_eco9) %>%
+thermo_summary <- thermo |>
+  group_by(wsa_eco9) |>
   summarise(
     mean_thermocline_depth = mean(thermocline_depth, na.rm = TRUE),
     median_thermocline_depth = median(thermocline_depth, na.rm = TRUE),
@@ -115,7 +115,7 @@ thermo_summary <- thermo %>%
 
 # histogram of thermocline depth by wsa_eco9
 ggplot(thermo, aes(x = thermocline_depth)) +
-  geom_histogram(binwidth = 1) +
+  geom_histogram(binwidth = 1, fill = "white", color = "steelblue") +
   facet_wrap(~wsa_eco9) +
   labs(
     title = "Distribution of Thermocline Depth by Ecoregion",
@@ -123,3 +123,76 @@ ggplot(thermo, aes(x = thermocline_depth)) +
     y = "Count of Lakes"
   ) +
   theme_minimal()
+
+# Summarize secchi depth by wsa_eco9
+secchi_summary <- d7 |>
+  group_by(wsa_eco9) |>
+  summarise(
+    mean_secchi = mean(secchi, na.rm = TRUE),
+    median_secchi = median(secchi, na.rm = TRUE),
+    n_lakes = n()
+  )
+
+# histogram of secchi depth by wsa_eco9
+ggplot(d7, aes(x = secchi)) +
+  geom_histogram(binwidth = 0.5, fill = "white", color = "steelblue") +
+  facet_wrap(~wsa_eco9) +
+  labs(
+    title = "Distribution of Secchi Depth by Ecoregion",
+    x = "Secchi Depth (m)",
+    y = "Count of Lakes"
+  ) +
+  theme_minimal()
+
+
+# writing a function to automate summary by ecoregion for any variable
+# variable name is unquoted and passed using curly-curly {{ }} syntax
+summarize_by_ecoregion <- function(data, variable) {
+  data |>
+    group_by(wsa_eco9) |>
+    summarise(
+      mean_value = mean({{ variable }}, na.rm = TRUE),
+      median_value = median({{ variable }}, na.rm = TRUE),
+      n_lakes = n()
+    )
+}
+
+summarize_by_ecoregion(thermo, thermocline_depth)
+summarize_by_ecoregion(d7, secchi)
+summarize_by_ecoregion(d7, depthmax)
+summarize_by_ecoregion(d7, area_ha)
+summarize_by_ecoregion(d7, ph)
+summarize_by_ecoregion(d7, do)
+
+# same function but with a quoted variable name
+summarize_by_ecoregion_quoted <- function(data, variable) {
+  data |>
+    group_by(wsa_eco9) |>
+    summarise(
+      mean_value = mean(.data[[variable]], na.rm = TRUE),
+      median_value = median(.data[[variable]], na.rm = TRUE),
+      n_lakes = n()
+    )
+}
+
+summarize_by_ecoregion_quoted(thermo, "thermocline_depth")
+summarize_by_ecoregion_quoted(d7, "secchi")
+
+# plotting function to automate histogram by ecoregion for any variable
+plot_histogram_by_ecoregion <- function(data, variable, binwidth = 1) {
+  ggplot(data, aes(x = .data[[variable]])) +
+    geom_histogram(binwidth = binwidth, fill = "white", color = "steelblue") +
+    facet_wrap(~wsa_eco9) +
+    labs(
+      title = paste("Distribution of", variable, "by Ecoregion"),
+      x = paste(variable, "(units)"),
+      y = "Count of Lakes"
+    ) +
+    theme_minimal()
+}
+
+plot_histogram_by_ecoregion(thermo, "thermocline_depth", binwidth = 1)
+plot_histogram_by_ecoregion(d7, "secchi", binwidth = 0.5)
+plot_histogram_by_ecoregion(d7, "depthmax", binwidth = 1)
+plot_histogram_by_ecoregion(d7, "ph", binwidth = 0.5)
+plot_histogram_by_ecoregion(d7, "do", binwidth = 1)
