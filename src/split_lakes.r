@@ -1,4 +1,5 @@
 box::use(dplyr[...])
+box::use(ggplot2[...])
 box::use(readr[read_csv])
 
 i7 <- read_csv(
@@ -67,7 +68,7 @@ d7 <- left_join(
 
 
 # Identify the thermocline depth as the depth of maximum temperature gradient
-d7 %>%
+thermo <- d7 %>%
   group_by(site_id, year) %>%
   # add number of observations per group (depth profile)
   add_tally() %>%
@@ -80,4 +81,45 @@ d7 %>%
   # filter(site_id == "NLA06608-3320") %>%
   mutate(thermocline_depth = depth[which.min(temp_gradient)]) %>%
   ungroup() |>
-  select(site_id, year, depth, temp, temp_gradient, thermocline_depth, n)
+  distinct(site_id, year, thermocline_depth, .keep_all = TRUE)
+
+
+# OMERNIK Ecoregions:
+
+# Eastern Highlands
+
+#     Northern Appalachians (NA): Includes rugged mountains and forests spanning from New England into the Central Appalachians.
+#     Southern Appalachians (SA): Covers the diverse forest and plateau regions of the southeastern United States.
+
+# Plains and Lowlands
+
+#     Coastal Plain (CP): Includes the flat, often marshy areas along the Atlantic and Gulf coasts.
+#     Northern Plains (NP): Comprises the vast grassland and agricultural areas of the upper Midwest and Dakotas.
+#     Southern Plains (SP): Encompasses the drier grasslands and prairies of the South Central U.S..
+#     Temperate Plains (TP): Covers the highly productive agricultural "corn belt" of the central Midwest.
+#     Upper Midwest (UM): Characterized by glaciated terrain and numerous lakes and wetlands.
+
+# West
+
+#     Western Mountains (WM): Includes the Rockies, Cascades, and Sierra Nevada ranges.
+#     Xeric West (XR): Encompasses the arid and semi-arid deserts and plateaus of the West
+
+# Summarise thermocline depth by wsa_eco9
+thermo_summary <- thermo %>%
+  group_by(wsa_eco9) %>%
+  summarise(
+    mean_thermocline_depth = mean(thermocline_depth, na.rm = TRUE),
+    median_thermocline_depth = median(thermocline_depth, na.rm = TRUE),
+    n_lakes = n()
+  )
+
+# histogram of thermocline depth by wsa_eco9
+ggplot(thermo, aes(x = thermocline_depth)) +
+  geom_histogram(binwidth = 1) +
+  facet_wrap(~wsa_eco9) +
+  labs(
+    title = "Distribution of Thermocline Depth by Ecoregion",
+    x = "Thermocline Depth (m)",
+    y = "Count of Lakes"
+  ) +
+  theme_minimal()
