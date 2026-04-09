@@ -84,4 +84,31 @@ for (i in seq_len(N_STUDENTS)) {
 
 message("\nListo. Archivos guardados en: ", OUTPUT_DIR)
 
-message("\nListo. Archivos guardados en: ", OUTPUT_DIR)
+# ---------------------------------------------------------
+# Crear un zip por estudiante
+# ---------------------------------------------------------
+
+# Archivos compartidos que van en todos los zips
+SHARED_FILES <- c(
+  "data-workseet-1.qmd",
+  "2007/nla2007_sampledlakeinformation_20091113.csv",
+  "2007/nla2007_sampled_lake_information_20091113_metadata.txt",
+  "2007/nla2007_secchi_20091008.csv",
+  "2007/nla2007_secchi_20091008_metadata.txt",
+  "2007/nla2007_profile_20091008_metadata.txt"
+)
+
+for (i in seq_len(N_STUDENTS)) {
+  profile_csv <- file.path(OUTPUT_DIR, paste0("profile_student_", i, ".csv"))
+  zip_name <- paste0("student_", i, ".zip")
+
+  # Todos los archivos a incluir: compartidos + perfil individual
+  files_to_zip <- c(SHARED_FILES, profile_csv)
+
+  # zip() necesita rutas relativas para que la estructura dentro del zip sea limpia
+  zip(zip_name, files = files_to_zip)
+
+  message(sprintf("Zip creado: %s", zip_name))
+}
+
+message("\nBundles listos.")

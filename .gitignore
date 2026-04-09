@@ -56,3 +56,5 @@ _freeze/
 
 # Generated student data splits
 students/
+
+*.zip
