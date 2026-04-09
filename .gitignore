@@ -47,3 +47,12 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Quarto render artifacts
+*.html
+*_files/
+_freeze/
+.quarto/
+
+# Generated student data splits
+students/

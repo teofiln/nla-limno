@@ -1,0 +1,196 @@
+---
+title: "Profundidad de la capa de mezcla por ecorregión en EE.UU."
+format: html
+execute:
+  warning: false
+  message: false
+---
+
+## Objetivo
+
+¿Cómo varía la profundidad de la capa de mezcla (MLD) entre las ecorregiones de los Estados Unidos?
+
+## 1. Cargar paquetes
+
+```{r}
+library("readr")   # para cargar datos en R (de csv o excel)
+library("dplyr")   # para manipular datos en data.frame (tabelas)
+library("ggplot2") # para crear graficos
+library("purrr")   # para aplicar funciones a listas o grupos de datos
+```
+
+## 2. Cargar los datos
+
+```{r}
+p7 <- readr::read_csv("2007/nla2007_profile_20091008.csv")
+```
+
+### 2.1 Información básica sobre el data frame
+
+```{r}
+nrow(p7)
+ncol(p7)
+dim(p7)
+summary(p7)
+dplyr::glimpse(p7)
+```
+
+### 2.2 ¿Cuántos lagos tenemos?
+
+Las siguientes cuatro expresiones hacen exactamente lo mismo:
+
+```{r}
+# Forma base: extraemos la columna SITE_ID, tomamos valores únicos y contamos
+length(unique(p7$SITE_ID))
+```
+
+```{r}
+p7 |>                          # partimos del data frame completo
+    dplyr::distinct(SITE_ID) |> # conservamos solo las filas con SITE_ID únicos
+    nrow()                      # contamos el número de filas resultantes
+```
+
+```{r}
+p7 |>                    # partimos del data frame completo
+    dplyr::pull(SITE_ID) |> # extraemos la columna SITE_ID como vector
+    unique() |>             # eliminamos los valores duplicados del vector
+    length()                # contamos cuántos valores quedan
+```
+
+```{r}
+p7$SITE_ID |> # extraemos la columna SITE_ID como vector usando $
+    unique() |> # eliminamos los valores duplicados
+    length()    # contamos el total de valores únicos
+```
+
+### ¿Cuál es el lago más profundo?
+
+```{r}
+p7 |>                                    # partimos del data frame completo
+    dplyr::group_by(SITE_ID) |>          # agrupamos por identificador de lago
+    dplyr::add_tally() |>                # añadimos columna n con el número de filas por grupo
+    dplyr::select(SITE_ID, n) |>         # conservamos solo las columnas de interés
+    dplyr::distinct() |>                 # eliminamos filas duplicadas dentro de cada grupo
+    dplyr::arrange(dplyr::desc(n))       # ordenamos de mayor a menor número de registros
+```
+
+```{r}
+p7 |>                                                      # partimos del data frame completo
+    dplyr::group_by(SITE_ID, YEAR, VISIT_NO) |>            # agrupamos por lago, año y visita
+    dplyr::add_tally() |>                                  # añadimos columna n con el número de filas por grupo
+    dplyr::filter(n > 1) |>                                # conservamos solo lagos con datos para profundidad
+    dplyr::filter(!is.na(DEPTH)) |>                        # removemos filas que no tienen datos para profundidad
+    dplyr::summarize(MAX_DEPTH = max(DEPTH, na.rm = TRUE))  |> # calculamos la profundidad máxima por grupo
+    dplyr::arrange(dplyr::desc(MAX_DEPTH))                     # ordenamos de mayor a menor profindidad maxima
+```
+
+## 3. Definir una función para calcular la MLD
+
+```{r}
+lago <- "NLA06608-0006"   # definimos el ID del lago con el que vamos a probar
+
+p7 |>
+    dplyr::filter(SITE_ID == lago) |>                     # conservamos solo las filas de ese lago
+    dplyr::select(SITE_ID, YEAR, VISIT_NO,
+                  DEPTH, TEMP_FIELD) |>                   # seleccionamos las columnas relevantes
+    dplyr::group_by(VISIT_NO) |>                          # agrupamos por número de visita
+    dplyr::mutate(TEMP_DIFF = c(NA, diff(TEMP_FIELD))) |> # calculamos la diferencia de temperatura entre profundidades consecutivas
+    print(n = 100)                                        # imprimimos hasta 100 filas para explorar el resultado
+```
+
+```{r}
+# Filtramos los datos para un solo lago y una sola visita
+data1 <- p7 |>
+    dplyr::filter(SITE_ID == lago, VISIT_NO == 1) |> # solo la primera visita del lago
+    dplyr::select(SITE_ID, YEAR, VISIT_NO,
+                  DEPTH, TEMP_FIELD, DATE_PROFILE)                 # columnas necesarias para el cálculo
+```
+
+```{r}
+# Definimos la función que calcula la profundidad de la termoclina
+calc_thermocline_depth <- function(data) {
+    data |>
+        dplyr::mutate(
+            TEMP_DIFF  = c(NA, diff(TEMP_FIELD)),                        # diferencia de temperatura entre capas consecutivas
+            TEMP_RANGE = max(TEMP_FIELD, na.rm = TRUE) - min(TEMP_FIELD, na.rm = TRUE) # rango total de temperatura en la columna de agua
+        ) |>
+        dplyr::select(SITE_ID, YEAR, VISIT_NO, DATE_PROFILE, DEPTH, TEMP_DIFF, TEMP_RANGE) |> # conservamos solo las columnas necesarias
+        dplyr::slice_min(order_by = TEMP_DIFF, with_ties = FALSE) |>     # seleccionamos la fila con el mayor gradiente negativo (termoclina); with_ties = FALSE garantiza una sola fila por lago
+        dplyr::rename(THERMOCLINE_DEPTH = DEPTH)
+}
+
+# Probamos la función con los datos del lago de ejemplo
+calc_thermocline_depth(data1)
+```
+
+## 4. Aplicar la función a todos los lagos
+
+```{r}
+thermo <- p7 |>                                        # partimos del data frame completo
+    dplyr::group_by(YEAR, SITE_ID, VISIT_NO) |>        # agrupamos por año, lago y visita
+    dplyr::group_split() |>                            # dividimos en una lista de data frames, uno por grupo
+    purrr::map_dfr(calc_thermocline_depth)             # aplicamos la función a cada data frame y combinamos los resultados en uno solo
+
+thermo
+```
+
+## 5. Resumir la MLD por ecorregión en una tabla
+
+Necesitamos combinar los datos de la termoclina con la información de los sitios para poder identificar la ecorregión de cada lago. Para eso, cargamos el dataset de información de sitios y lo unimos al dataset `thermo`.
+
+```{r}
+i7 <- readr::read_csv("2007/nla2007_sampledlakeinformation_20091113.csv") # cargamos la información de los sitios de muestreo
+
+d7 <- dplyr::left_join(thermo, i7,                         # unimos los datos de termoclina con la información de sitios
+                        by = c("SITE_ID", "VISIT_NO"),      # usando SITE_ID y VISIT_NO como columnas de unión
+                        relationship = "many-to-many") |>   # puede haber múltiples filas coincidentes en ambas tablas
+    dplyr::select(SITE_ID, YEAR, VISIT_NO,                 # seleccionamos solo las columnas relevantes
+                  THERMOCLINE_DEPTH, TEMP_DIFF, TEMP_RANGE, WSA_ECO9)
+```
+
+Ahora podemos calcular el resumen:
+
+```{r}
+d7 |>
+  dplyr::group_by(WSA_ECO9) |>                                                    # agrupamos por ecorregión
+  dplyr::summarise(
+    mean_thermocline_depth   = mean(THERMOCLINE_DEPTH, na.rm = TRUE),             # profundidad media de la termoclina
+    median_thermocline_depth = median(THERMOCLINE_DEPTH, na.rm = TRUE),           # mediana de la profundidad
+    n_lakes = n()                                                                  # número de registros por ecorregión
+  )
+```
+
+## 6. Gráfico de la distribución de la MLD por ecorregión
+
+```{r}
+# histograma de la profundidad de la termoclina por ecorregión
+ggplot(d7, aes(x = THERMOCLINE_DEPTH)) +         # usamos THERMOCLINE_DEPTH en el eje x
+  geom_histogram(binwidth = 1,                   # cada barra representa 1 metro de profundidad
+                 color = "white",                # color del borde de las barras
+                 fill = "steelblue") +           # color de relleno de las barras
+  facet_wrap(~WSA_ECO9) +                        # creamos un panel separado para cada ecorregión
+  labs(
+    title = "Distribución de la Profundidad de la Termoclina por Ecorregión",
+    x = "Profundidad de la termoclina (m)",
+    y = "Número de lagos"
+  ) +
+  theme_minimal()                                # usamos un tema limpio sin fondo gris
+```
+
+# Tarea
+
+1. ¿Por qué la profundidad máxima inferida a partir del conteo de filas por lago difiere de la obtenida buscando explícitamente el valor máximo de la columna de profundidad?
+
+2. Agrega columnas a la tabla resumen por ecorregión para:
+- profundidad máxima de la termoclina
+- profundidad mínima de la termoclina
+- desviación estándar de la profundidad de la termoclina
+
+3. Filtra el data frame `thermo` para excluir los lagos que probablemente no estaban estratificados. La columna `TEMP_RANGE` ya contiene la diferencia entre la temperatura máxima y mínima de la columna de agua para cada lago/visita. Considera no estratificados los lagos donde `TEMP_RANGE` sea menor a 2°C y exclúyelos del análisis.
+
+4. Analiza la estabilidad de la termoclina en lagos con más de una visita siguiendo estos pasos:
+
+   - Carga el paquete `lubridate` con `library("lubridate")`. El data frame `thermo` ya incluye la columna `DATE_PROFILE` — conviértela a tipo fecha con `lubridate::mdy()`.
+   - Filtra `thermo` para quedarte solo con los lagos que tienen más de una visita (`VISIT_NO > 1` no es suficiente — piensa en qué función usarías para contar visitas por lago).
+   - Para cada lago, calcula la diferencia en `THERMOCLINE_DEPTH` entre la visita 1 y la visita 2, y el número de días transcurridos entre ambas fechas. Expresa también el cambio de forma normalizada: divide la diferencia absoluta entre la profundidad máxima del lago (`max(DEPTH)` calculado desde `p7`). Esto permite comparar lagos de distintas profundidades en igualdad de condiciones.
+   - Escribe un breve comentario: ¿cuánto cambia la profundidad de la termoclina entre visitas? ¿Cambia más en algunas ecorregiones que en otras?
