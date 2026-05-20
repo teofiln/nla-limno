@@ -1,0 +1,317 @@
+---
+title: "Hoja de trabajo: combinar la quimica del NLA (2007, 2012, 2017, 2022)"
+format: html
+execute:
+	warning: false
+	message: false
+---
+
+## Objetivo
+
+En esta guia vas a construir una sola tabla de quimica para los cuatro anos de muestreo del NLA.
+
+Tabla final esperada (formato largo armonizado):
+
+- `year`: ano del ciclo (2007, 2012, 2017, 2022)
+- `site`: identificador del lago (sitio)
+- `visit`: numero de visita dentro del ano
+- `tp`: fosforo total
+- `tn`: nitrogeno total
+- `chla`: clorofila-a
+
+## 1. Cargar paquetes
+
+```{r}
+library("readr") # para read/write operaciones
+library("dplyr") # manipular data frames
+library("tidyr") # manipular data frames (format largo - ancho)
+library("ggplot2") # graficos
+```
+
+## 2. Cargar archivos para todos los anios
+
+```{r}
+chem_2007 <- readr::read_csv("2007/nla2007_chemical_conditionestimates_20091123.csv")
+
+# Tu codigo aqui
+
+```
+
+## 3. EDA inicial (obligatorio antes de transformar)
+
+### 3.1 Tamanos de las tablas
+
+```{r}
+dplyr::tibble(
+	tabla = c("chem_2007", "chem_2012", "chem_2017", "chem_2022"),
+	filas = c(nrow(chem_2007), nrow(chem_2012), nrow(chem_2017), nrow(chem_2022)),
+	columnas = c(ncol(chem_2007), ncol(chem_2012), ncol(chem_2017), ncol(chem_2022))
+)
+```
+
+### 3.2 Nombres de columnas y estructura
+
+```{r}
+# Nombres de columnas
+
+# Tu codigo aqui
+```
+
+```{r}
+# Estructura
+
+# Tu codigo aqui
+
+```
+
+### 3.3 Preguntas guiadas (completa en clase)
+
+1. Que columnas identifican sitio y visita en cada ano?
+2. Que nombre recibe el fosforo total en cada ano?
+3. Que nombre recibe el nitrogeno total en cada ano?
+4. Que nombre recibe la clorofila-a en cada ano?
+5. Cual ano esta en formato largo (una fila por analito)?
+6. En que anos aparecen columnas con sufijo `_RESULT`?
+
+Completa esta tabla:
+
+| year | columna sitio | columna visita | columna TP | columna TN | columna CHLA | formato |
+|---|---|---|---|---|---|---|
+| 2007 | | | | | | |
+| 2012 | | | | | | |
+| 2017 | | | | | | |
+| 2022 | | | | | | |
+
+## 4. Armonizar 2007
+
+En 2007, las variables quimicas ya vienen en formato ancho y con nombres cortos (`PTL`, `NTL`, `CHLA`).
+
+### Tu tarea
+
+1. Crear `nla_2007` con las 6 columnas finales.
+2. Renombrar:
+	 - `SITE_ID` -> `site`
+	 - `VISIT_NO` -> `visit`
+	 - `PTL` -> `tp`
+	 - `NTL` -> `tn`
+	 - `CHLA` -> `chla`
+3. Agregar columna fija `year = 2007`.
+
+```{r}
+# Tu codigo aqui
+
+dplyr::glimpse(nla_2007)
+```
+
+Chequeo:
+
+```{r}
+nla_2007 |>
+	dplyr::count(site, visit) |>
+	dplyr::filter(n > 1)
+```
+
+## 5. Armonizar 2012
+
+### Que significa UID y por que importa en 2012
+
+- `UID` es un identificador unico de una observacion de campo/laboratorio.
+- En 2012, la tabla de quimica usa `UID`, pero la columna de sitio (`SITE_ID`) esta en otra tabla.
+- Por eso hay que hacer una union (join) para recuperar `SITE_ID` y `VISIT_NO`.
+
+### Tabla de referencia (lookup table)
+
+En este contexto, una "lookup table" es una tabla pequena que sirve para traducir una clave a otra.
+
+- Clave disponible en quimica: `UID`
+- Datos que queremos recuperar: `SITE_ID` y `VISIT_NO`
+- Entonces construimos una tabla `UID -> SITE_ID, VISIT_NO`
+
+### 5.1 Construir la tabla de referencia UID
+
+```{r}
+site_2012 <- readr::read_csv("2012/nla2012_wide_siteinfo_08232016.csv")
+
+# Tu codigo aqui
+
+dplyr::glimpse(lookup_2012)
+```
+
+### 5.2 Unir quimica + referencia y armonizar columnas
+
+### Tu tarea
+
+1. Filtrar solo muestras regulares (`SAM_CODE == "REGULAR"`).
+2. Hacer `left_join()` por `UID`.
+3. Crear columnas finales (`year`, `site`, `visit`, `tp`, `tn`, `chla`) usando:
+	 - `PTL_RESULT`, `NTL_RESULT`, `CHLA_RESULT`
+
+```{r}
+
+# Tu codigo aqui
+
+dplyr::glimpse(nla_2012)
+```
+
+Controles de calidad:
+
+```{r}
+# Debe ser 0 o cercano a 0
+nla_2012 |>
+	dplyr::summarise(
+		sitios_sin_match = sum(is.na(site)),
+		visitas_sin_match = sum(is.na(visit))
+	)
+
+# No deberia haber duplicados sitio-visita
+nla_2012 |>
+	dplyr::count(site, visit) |>
+	dplyr::filter(n > 1)
+```
+
+## 6. Armonizar 2017 (pasar de largo a ancho)
+
+2017 es diferente:
+
+- `ANALYTE` guarda el nombre del analito (PTL, NTL, CHLA, etc.)
+- `RESULT` guarda el valor
+- Hay varias filas por sitio-visita (una por analito)
+
+### 6.1 Ver los analitos disponibles
+
+```{r}
+# Tu codigo aqui
+```
+
+### 6.2 Tu tarea guiada
+
+1. Filtrar `SAM_CODE == "REGULAR"`.
+2. Quedarte solo con `ANALYTE %in% c("PTL", "NTL", "CHLA")`.
+3. Seleccionar `SITE_ID`, `VISIT_NO`, `ANALYTE`, `RESULT`.
+4. Usar `pivot_wider()` para crear columnas PTL, NTL, CHLA.
+5. Renombrar al esquema final.
+
+```{r}
+# Tu codigo aqii
+
+dplyr::glimpse(nla_2017)
+```
+
+Verificar si hay analitos repetidos por sitio-visita:
+
+```{r}
+chem_2017 |>
+	dplyr::filter(SAM_CODE == "REGULAR") |>
+	dplyr::filter(ANALYTE %in% c("PTL", "NTL", "CHLA")) |>
+	dplyr::count(SITE_ID, VISIT_NO, ANALYTE) |>
+	dplyr::filter(n > 1)
+```
+
+## 7. Armonizar 2022
+
+2022 se parece a 2012 para los analitos finales: usa columnas `*_RESULT`.
+
+### Tu tarea
+
+1. Filtrar `SAM_CODE == "REGULAR"`.
+2. Crear `year`, `site`, `visit`, `tp`, `tn`, `chla` desde:
+	 - `PTL_RESULT`, `NTL_RESULT`, `CHLA_RESULT`
+
+```{r}
+
+# Tu codigo aqui.
+dplyr::glimpse(nla_2022)
+```
+
+Chequeo:
+
+```{r}
+nla_2022 |>
+	dplyr::count(site, visit) |>
+	dplyr::filter(n > 1)
+```
+
+## 8. Combinar los cuatro anos
+
+### Tu tarea
+
+1. Apilar las cuatro tablas con `bind_rows()`.
+2. Ordenar por `year`, `site`, `visit`.
+3. Verificar que las columnas finales sean exactamente 6.
+
+```{r}
+
+# Tu codigo aqui
+
+nla_chem_all
+```
+
+```{r}
+names(nla_chem_all)
+dplyr::glimpse(nla_chem_all)
+```
+
+## 9. EDA de la tabla final
+
+### 9.1 Cuantas filas hay por ano?
+
+```{r}
+# Tu codigo aqui
+```
+
+### 9.2 Faltantes por ano
+
+```{r}
+# Tu codigo aqui
+```
+
+### 9.3 Distribuciones por ano
+
+#### Pasos: Crear un histograma para TP
+- Usa `ggplot()` para inicializar el gráfico.
+- Define los datos y las estéticas: `aes(x = tp)`.
+- Agrega un histograma con `geom_histogram()`.
+- Ajusta el número de bins y los colores.
+- Usa `facet_wrap()` para dividir por año.
+- Aplica una escala logarítmica con `scale_x_continuous(trans = "log10")`.
+- Usa colores diferentes para nutrientes diferentes
+
+```{r}
+# TP
+# tu codigo aqui
+```
+
+```{r}
+# TN
+# tu codigo aqui
+```
+
+```{r}
+# ChlA
+# tu codigo aqui
+```
+
+### 9.4 Relacion TP-CHLA
+
+#### Paso 1: Crear un gráfico de dispersión
+- Usa `ggplot()` para inicializar el gráfico.
+- Define los datos y las estéticas: `aes(x = tp, y = chla, color = factor(year))`.
+- Agrega puntos con `geom_point()`.
+- Ajusta la transparencia (`alpha`) y el tamaño (`size`).
+- Aplica escalas logarítmicas a ambos ejes con `scale_x_continuous()` y `scale_y_continuous()`.
+- Agrega etiquetas y un título con `labs()`.
+
+```{r}
+# TP ~ ChlA
+# tu codigo aqui
+```
+
+## 10. Tarea
+
+1. Crear `tp_tn_ratio = tp / tn` y comparar por ano.
+2. Quedarte solo con filas completas (`tp`, `tn`, `chla`) y reportar cuantas se pierden por ano.
+3. Guardar el resultado final.
+
+```{r}
+readr::write_csv(nla_chem_all, "students/nla_chemistry_2007_2012_2017_2022_long.csv")
+```
