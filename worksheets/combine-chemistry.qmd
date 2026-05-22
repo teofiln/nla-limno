@@ -315,3 +315,14 @@ dplyr::glimpse(nla_chem_all)
 ```{r}
 readr::write_csv(nla_chem_all, "students/nla_chemistry_2007_2012_2017_2022_long.csv")
 ```
+
+
+4. Calcular el coeficiente de variacion para fosforo total, nitrogeno total y clorofila-a entre anos. Para cada variable, primero calcula la media por ano y luego calcula `CoefVar = 100 * sd(yearly_mean) / mean(yearly_mean)` usando las 4 medias anuales.
+Reportalo en una tabla con las columnas Variable y CoefVar.
+
+5. Unir el dataset de Secchi (incluido en la carpeta de cada ano) con los datasets armonizados de nutrientes _antes de combinarlos en un solo data frame para todos los anos_. Recordatorio: aplica la misma logica de filtro por tipo de muestra usada antes (solo muestras regulares cuando exista una columna de tipo de muestra) antes de unir. Ademas, los nombres de la variable de Secchi cambian segun el ano, asi que armonizalos en una sola columna comun (por ejemplo, `secchi`): en 2007 usa `SECMEAN`, en 2012 usa `SECCHI`, y en 2017/2022 usa `INDEX_SITE_DEPTH`. Luego combina nutrientes + secchi en un solo data frame y muestra la relacion entre TP y Secchi, TN y Secchi, y ChlA y Secchi con un diagrama de dispersion. Agrega lineas de regresion lineal con color por ano usando `geom_smooth(method = "lm")`. Cual relacion es la mas fuerte? Cual es la mas debil? Resume el resultado en un parrafo corto.
+
+6. Extraer los lagos con mas de una visita por ano usando `Site_ID`. Para esos lagos, mostrar la diferencia en TP, TN, ChlA y profundidad Secchi entre visitas. Hay alguna tendencia? Resume tus hallazgos en un parrafo (numero de lagos por ano, diferencia promedio por parametro, tendencias si las hay, etc.).
+
+7. Clasificar los lagos por nivel trofico (oligo, meso, eu) usando los umbrales dados en clase. Identificar lagos que podrian ser candidatos fuertes a condiciones anoxicas en el hipolimnio. Validar tus resultados con los datasets de perfiles de oxigeno. Para esto, identifica los lagos hipoxicos y compara los `Site_ID` por ano con los `Site_ID` de los lagos potenciales que identificaste con base en nutrientes. Que fraccion de lagos altamente eutroficos tambien es hipoxica?
+
